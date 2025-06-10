@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>簡易記帳系統</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            max-width: 800px;
+            margin: 0 auto 30px auto;
+        }
+        h1, h2 {
+            color: #0056b3;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 8px;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px;
+            border: none;
+            border-radius: 4px;
+            width: 100%;
+            font-size: 18px;
+            cursor: pointer;
+            margin-top: 5px; /* 為按鈕增加一些間距 */
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .action-button {
+            padding: 6px 10px;
+            font-size: 14px;
+            margin-right: 5px;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+        }
+        .edit { background-color: #28a745; }
+        .delete { background-color: #dc3545; }
+
+        .message {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .warning {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .speech-button { /* 語音按鈕的樣式 */
+            background-color: #28a745;
+            margin-top: 10px;
+        }
+        .speech-button:hover {
+            background-color: #218838;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        table th, table td {
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+        table th {
+            background-color: #f2f2f2;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2;
+            left: 0; top: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background: white;
+            margin: 10% auto;
+            padding: 20px;
+            width: 90%;
+            max-width: 500px;
+            border-radius: 8px;
+            position: relative;
+        }
+        .close-button {
+            position: absolute;
+            right: 15px;
+            top: 10px;
+            font-size: 24px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>簡易記帳系統</h1>
+        <form id="expenseForm">
+            <h2>新增支出</h2>
+            <label for="title">標題：</label>
+            <input type="text" id="title" required>
+            <label for="amount">金額：</label>
+            <input type="number" id="amount" step="0.01" required>
+            <label for="category">分類：</label>
+            <select id="category" required>
+                <option value="">請選擇</option>
+                <option>餐飲</option>
+                <option>交通</option>
+                <option>娛樂</option>
+                <option>購物</option>
+                <option>生活</option>
+                <option>其他</option>
+            </select>
+            <label for="date">日期：</label>
+            <input type="date" id="date" required>
+
+            <button type="button" class="speech-button" id="speechInputButton">語音輸入標題、金額、分類、日期</button>
+
+            <button type="submit">新增支出</button>
+            <div id="message" class="message"></div>
+        </form>
+    </div>
+
+    <div class="container">
+        <h2>設定分類預算</h2>
+        <form id="categoryBudgetForm">
+            <label for="cbYear">年份：</label>
+            <input type="number" id="cbYear" min="2000" max="2100" value="2025" required>
+            <label for="cbMonth">月份：</label>
+            <input type="number" id="cbMonth" min="1" max="12" value="5" required>
+            <label for="cbCategory">分類：</label>
+            <select id="cbCategory" required>
+                <option value="">請選擇</option>
+                <option>餐飲</option>
+                <option>交通</option>
+                <option>娛樂</option>
+                <option>購物</option>
+                <option>生活</option>
+                <option>其他</option>
+            </select>
+            <label for="cbAmount">預算金額：</label>
+            <input type="number" id="cbAmount" step="0.01" min="0" required>
+            <button type="submit">儲存分類預算</button>
+            <div id="categoryBudgetMessage" class="message"></div>
+        </form>
+        <h3>當月分類預算概覽：</h3>
+        <p>總預算：<span id="totalMonthlyBudget">--</span></p>
+        <table id="categoryBudgetTable">
+            <thead>
+                <tr>
+                    <th>分類</th>
+                    <th>預算金額</th>
+                </tr>
+            </thead>
+            <tbody id="categoryBudgetTableBody">
+                </tbody>
+        </table>
+    </div>
+
+    <div class="container">
+        <h2>每月分類支出統計</h2>
+        <div>
+            <label for="statYear">年份：</label>
+            <input type="number" id="statYear" min="2000" max="2100" value="2025">
+            <label for="statMonth">月份：</label>
+            <input type="number" id="statMonth" min="1" max="12" value="5">
+            <button onclick="loadMonthlyStatistics()">查看統計</button>
+        </div>
+
+        <h3>分類支出明細：</h3>
+        <table id="monthlyStatTable">
+            <thead>
+                <tr>
+                    <th>分類</th>
+                    <th>總金額</th>
+                </tr>
+            </thead>
+            <tbody id="monthlyStatTableBody">
+                </tbody>
+        </table>
+
+        <h3>支出分佈圓餅圖：</h3>
+        <div style="width: 70%; margin: 20px auto;">
+            <canvas id="expensePieChart"></canvas>
+        </div>
+
+        <h3>預算對比直條圖：</h3>
+        <div style="width: 70%; margin: 20px auto;">
+            <canvas id="budgetComparisonChart"></canvas>
+        </div>
+
+        <div id="monthlyStatMessage" class="message"></div>
+    </div>
+
+    <div class="container">
+        <h2>支出紀錄</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>標題</th>
+                    <th>金額</th>
+                    <th>分類</th>
+                    <th>日期</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="expenseTableBody"></tbody>
+        </table>
+    </div>
+
+    <div class="modal" id="editModal">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeEditModal()">&times;</span>
+            <h2>編輯支出</h2>
+            <form id="editForm">
+                <input type="hidden" id="editId">
+                <label>標題：</label><input type="text" id="editTitle" required>
+                <label>金額：</label><input type="number" id="editAmount" step="0.01" required>
+                <label>分類：</label>
+                <select id="editCategory" required>
+                    <option>餐飲</option><option>交通</option><option>娛樂</option>
+                    <option>購物</option><option>生活</option><option>其他</option>
+                </select>
+                <label>日期：</label><input type="date" id="editDate" required>
+                <button type="submit">儲存修改</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>查詢支出紀錄</h3>
+        <label>開始日期：</label>
+        <input type="date" id="startDate">
+        <label>結束日期：</label>
+        <input type="date" id="endDate">
+        <button onclick="queryExpenses()">查詢</button>
+        <button onclick="resetExpenses()">重置</button>
+    </div>
+
+    <script>
+        const expenseApiUrl = '/api/expenses';
+        const categoryBudgetApiUrl = '/api/category-budgets';
+        const statisticsApiUrl = '/api/expenses/statistics';
+
+        let expensePieChartInstance = null;
+        let budgetComparisonChartInstance = null;
+
+        // 載入所有支出或依日期區間查詢
+        async function loadExpenses() {
+            queryExpenses();
+        }
+
+        // 新增支出表單提交
+        document.getElementById('expenseForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            const data = {
+                title: title.value,
+                amount: parseFloat(amount.value),
+                category: category.value,
+                date: date.value
+            };
+            const res = await fetch(expenseApiUrl, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            const msg = document.getElementById('message');
+
+            if (res.ok) {
+                const responseData = await res.json();
+                if (responseData.overbudget) {
+                    msg.textContent = responseData.message + ' 您可以考慮調整其他預算或支出。';
+                    msg.className = 'message warning';
+                } else {
+                    msg.textContent = responseData.message || '新增成功';
+                    msg.className = 'message success';
+                }
+                e.target.reset();
+                loadExpenses();
+                loadCategoryBudgets();
+                loadMonthlyStatistics();
+            } else {
+                const errorBody = await res.json();
+                msg.textContent = errorBody.message || '新增失敗';
+                msg.className = 'message error';
+            }
+        });
+
+        // 分類預算表單提交
+        document.getElementById('categoryBudgetForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            const data = {
+                year: parseInt(cbYear.value),
+                month: parseInt(cbMonth.value),
+                category: cbCategory.value,
+                amount: parseFloat(cbAmount.value)
+            };
+            const res = await fetch(categoryBudgetApiUrl, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            const msg = document.getElementById('categoryBudgetMessage');
+            if (res.ok) {
+                msg.textContent = '分類預算儲存成功'; msg.className = 'message success';
+                loadCategoryBudgets();
+                loadMonthlyStatistics();
+            } else {
+                const errorBody = await res.json();
+                msg.textContent = errorBody.message || '分類預算儲存失敗';
+                msg.className = 'message error';
+            }
+        });
+
+        // 載入分類預算概覽和總預算
+        async function loadCategoryBudgets() {
+            const year = parseInt(cbYear.value);
+            const month = parseInt(cbMonth.value);
+
+            // 載入分類預算列表
+            try {
+                const categoryRes = await fetch(`${categoryBudgetApiUrl}/${year}/${month}`);
+                if (!categoryRes.ok) throw new Error('Failed to load category budgets');
+                const categoryBudgets = await categoryRes.json();
+                const categoryBudgetTableBody = document.getElementById('categoryBudgetTableBody');
+                categoryBudgetTableBody.innerHTML = '';
+                if (categoryBudgets.length === 0) {
+                    categoryBudgetTableBody.innerHTML = '<tr><td colspan="2">本月尚無分類預算。</td></tr>';
+                } else {
+                    categoryBudgets.forEach(cb => {
+                        categoryBudgetTableBody.innerHTML += `
+                            <tr>
+                                <td>${cb.category}</td>
+                                <td>${cb.amount.toFixed(2)}</td>
+                            </tr>
+                        `;
+                    });
+                }
+            } catch (error) {
+                console.error('載入分類預算失敗:', error);
+                document.getElementById('categoryBudgetMessage').textContent = '載入分類預算失敗';
+                document.getElementById('categoryBudgetMessage').className = 'message error';
+            }
+
+            // 載入當月總預算
+            try {
+                const totalBudgetRes = await fetch(`${categoryBudgetApiUrl}/total/${year}/${month}`);
+                if (!totalBudgetRes.ok) throw new Error('Failed to load total budget');
+                const totalBudgetData = await totalBudgetRes.json();
+                document.getElementById('totalMonthlyBudget').textContent = totalBudgetData.totalBudget.toFixed(2) || '0.00';
+            }
+            catch (error) {
+                console.error('載入總預算失敗:', error);
+                document.getElementById('totalMonthlyBudget').textContent = '--';
+            }
+        }
+
+        // 刪除支出紀錄
+        async function deleteExpense(id) {
+            if (!confirm('確定刪除？')) return;
+            await fetch(`${expenseApiUrl}/${id}`, { method: 'DELETE' });
+            loadExpenses();
+            loadCategoryBudgets();
+            loadMonthlyStatistics();
+        }
+
+        // 開啟編輯彈窗並載入數據
+        function openEditModal(id) {
+            fetch(`${expenseApiUrl}/${id}`)
+                .then(res => res.json())
+                .then(data => {
+                    editId.value = data.id;
+                    editTitle.value = data.title;
+                    editAmount.value = data.amount;
+                    editCategory.value = data.category;
+                    editDate.value = data.date;
+                    document.getElementById('editModal').style.display = 'block';
+                });
+        }
+
+        // 關閉編輯彈窗
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+
+        // 編輯表單提交
+        document.getElementById('editForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            const id = editId.value;
+            const data = {
+                title: editTitle.value,
+                amount: parseFloat(editAmount.value),
+                category: editCategory.value,
+                date: editDate.value
+            };
+            const res = await fetch(`${expenseApiUrl}/${id}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            closeEditModal();
+
+            const msg = document.getElementById('message');
+            if (res.ok) {
+                const responseData = await res.json();
+                if (responseData.overbudget) {
+                    msg.textContent = responseData.message + ' 您可以考慮調整其他預算或支出。';
+                    msg.className = 'message warning';
+                } else {
+                    msg.textContent = responseData.message || '支出已更新';
+                    msg.className = 'message success';
+                }
+                loadExpenses();
+                loadCategoryBudgets();
+                loadMonthlyStatistics();
+            } else {
+                const errorBody = await res.json();
+                msg.textContent = errorBody.message || '更新失敗';
+                msg.className = 'message error';
+            }
+        });
+
+        // 執行日期區間查詢
+        function queryExpenses() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+
+            let url = '/api/expenses';
+            if (startDate && endDate) {
+                url += `?startDate=${startDate}&endDate=${endDate}`;
+            }
+
+            fetch(url)
+            .then(response => response.json())
+            .then(data => updateExpenseTable(data))
+            .catch(error => console.error('查詢失敗', error));
+        }
+
+        // 重置日期查詢條件並重新載入所有支出
+        function resetExpenses() {
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            queryExpenses();
+        }
+
+        // 更新支出表格內容
+        function updateExpenseTable(expenses) {
+            const tableBody = document.getElementById('expenseTableBody');
+            tableBody.innerHTML = '';
+
+            if (expenses.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="6">沒有符合條件的支出紀錄。</td></tr>';
+                return;
+            }
+
+            expenses.forEach(expense => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${expense.id}</td>
+                    <td>${expense.title}</td>
+                    <td>${expense.amount.toFixed(2)}</td>
+                    <td>${expense.category}</td>
+                    <td>${expense.date}</td>
+                    <td>
+                        <button class="action-button edit" onclick="openEditModal(${expense.id})">編輯</button>
+                        <button class="action-button delete" onclick="deleteExpense(${expense.id})">刪除</button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        // 載入每月支出統計數據
+        async function loadMonthlyStatistics() {
+            const year = document.getElementById('statYear').value;
+            const month = document.getElementById('statMonth').value;
+            const msg = document.getElementById('monthlyStatMessage');
+            msg.textContent = '';
+
+            if (!year || !month) {
+                msg.textContent = '請選擇年份和月份。';
+                msg.className = 'message error';
+                return;
+            }
+
+            try {
+                const res = await fetch(`${statisticsApiUrl}/${year}/${month}`);
+                if (!res.ok) {
+                    throw new Error('無法獲取每月統計數據。');
+                }
+                const data = await res.json();
+                console.log('每月分類統計數據 (包含預算):', data);
+
+                updateMonthlyStatTable(data);
+                renderExpensePieChart(data);
+                renderBudgetComparisonChart(data);
+                msg.textContent = '每月統計數據已更新。';
+                msg.className = 'message success';
+
+            } catch (error) {
+                console.error('載入每月統計失敗:', error);
+                msg.textContent = `載入每月統計失敗：${error.message}`;
+                msg.className = 'message error';
+                updateMonthlyStatTable([]);
+                renderExpensePieChart([]);
+                renderBudgetComparisonChart([]);
+            }
+        }
+
+        // 更新每月統計表格
+        function updateMonthlyStatTable(statistics) {
+            const tbody = document.getElementById('monthlyStatTableBody');
+            tbody.innerHTML = '';
+
+            if (statistics.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="2">本月尚無支出紀錄。</td></tr>';
+                return;
+            }
+
+            statistics.forEach(item => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${item.category}</td>
+                        <td>${item.totalAmount.toFixed(2)}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        // 繪製圓餅圖
+        function renderExpensePieChart(statistics) {
+            const ctx = document.getElementById('expensePieChart').getContext('2d');
+
+            if (expensePieChartInstance) {
+                expensePieChartInstance.destroy();
+            }
+
+            if (statistics.length === 0) {
+                expensePieChartInstance = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: ['無數據'],
+                        datasets: [{
+                            data: [1],
+                            backgroundColor: ['#cccccc'],
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            title: {
+                                display: true,
+                                text: '本月無支出數據'
+                            }
+                        }
+                    }
+                });
+                return;
+            }
+
+            const labels = statistics.map(item => item.category);
+            const data = statistics.map(item => item.totalAmount);
+            const backgroundColors = [
+                '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#E7E9ED', '#C9CBCE', '#A6C887', '#F08080'
+            ];
+
+            expensePieChartInstance = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: backgroundColors.slice(0, labels.length),
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: true,
+                            text: '每月分類支出分佈'
+                        }
+                    }
+                }
+            });
+        }
+
+        // 繪製預算對比直條圖
+        function renderBudgetComparisonChart(statistics) {
+            const ctx = document.getElementById('budgetComparisonChart').getContext('2d');
+
+            if (budgetComparisonChartInstance) {
+                budgetComparisonChartInstance.destroy();
+            }
+
+            if (statistics.length === 0) {
+                budgetComparisonChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['無數據'],
+                        datasets: [{
+                            label: '實際支出',
+                            data: [0],
+                            backgroundColor: '#cccccc'
+                        }, {
+                            label: '預算',
+                            data: [0],
+                            backgroundColor: '#999999'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            title: {
+                                display: true,
+                                text: '本月無支出或預算數據'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: '金額'
+                                }
+                            }
+                        }
+                    }
+                });
+                return;
+            }
+
+            const labels = statistics.map(item => item.category);
+            const totalAmounts = statistics.map(item => item.totalAmount);
+            const budgetAmounts = statistics.map(item => item.budgetAmount || 0);
+
+            budgetComparisonChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '實際支出',
+                        data: totalAmounts,
+                        backgroundColor: 'rgba(255, 99, 132, 0.6)', // 紅色系
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1
+                    }, {
+                        label: '預算',
+                        data: budgetAmounts,
+                        backgroundColor: 'rgba(54, 162, 235, 0.6)', // 藍色系
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: true,
+                            text: '每月分類支出 vs. 預算對比'
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: '分類'
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: '金額'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+
+        // 頁面載入完成時執行
+        document.addEventListener('DOMContentLoaded', () => {
+            loadExpenses();
+
+            // 設置預算和統計區塊的預設年份和月份為當前時間
+            const today = new Date();
+            const currentYear = today.getFullYear();
+            const currentMonth = today.getMonth() + 1;
+
+            // 預算設定區塊
+            document.getElementById('cbYear').value = currentYear;
+            document.getElementById('cbMonth').value = currentMonth;
+            loadCategoryBudgets();
+            document.getElementById('cbYear').addEventListener('change', loadCategoryBudgets);
+            document.getElementById('cbMonth').addEventListener('change', loadCategoryBudgets);
+
+            // 統計區塊
+            document.getElementById('statYear').value = currentYear;
+            document.getElementById('statMonth').value = currentMonth;
+            loadMonthlyStatistics();
+            document.getElementById('statYear').addEventListener('change', loadMonthlyStatistics);
+            document.getElementById('statMonth').addEventListener('change', loadMonthlyStatistics);
+
+            // === 語音輸入功能初始化 ===
+            const speechInputButton = document.getElementById('speechInputButton');
+            const messageDisplay = document.getElementById('message');
+
+            if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                const recognition = new SpeechRecognition();
+
+                recognition.lang = 'zh-TW'; // 設定語音識別語言為繁體中文
+                recognition.continuous = false; // 只識別一次
+                recognition.interimResults = false; // 不顯示中間結果
+
+                speechInputButton.addEventListener('click', () => {
+                    messageDisplay.textContent = '請說出支出資訊 (例如: 買咖啡 120 元 餐飲 昨天)';
+                    messageDisplay.className = 'message info'; // 可以新增 info 樣式
+                    recognition.start();
+                });
+
+                recognition.onresult = (event) => {
+                    const speechResult = event.results[0][0].transcript;
+                    messageDisplay.textContent = `識別結果: ${speechResult}`;
+                    messageDisplay.className = 'message success';
+
+                    applySpeechResultToForm(speechResult);
+                };
+
+                recognition.onerror = (event) => {
+                    messageDisplay.textContent = `語音識別錯誤: ${event.error}`;
+                    messageDisplay.className = 'message error';
+                };
+
+                recognition.onend = () => {
+                    // console.log('語音識別結束。');
+                };
+
+            } else {
+                speechInputButton.style.display = 'none'; // 瀏覽器不支持則隱藏按鈕
+                messageDisplay.textContent = '抱歉，您的瀏覽器不支持語音輸入功能。請使用 Chrome 或其他兼容瀏覽器。';
+                messageDisplay.className = 'message error';
+            }
+        });
+
+        // ===============================================
+        // 新增和優化的語音解析邏輯函數
+        // ===============================================
+
+        function applySpeechResultToForm(speechResult) {
+            const titleInput = document.getElementById('title');
+            const amountInput = document.getElementById('amount');
+            const categorySelect = document.getElementById('category');
+            const dateInput = document.getElementById('date');
+            const messageDisplay = document.getElementById('message');
+
+            let parsedTitle = speechResult;
+            let parsedAmount = null;
+            let parsedCategory = null;
+            let parsedDate = null;
+
+            // 輔助函數：將 Date 物件格式化為 YYYY-MM-DD
+            const formatDate = (date) => date.toISOString().split('T')[0];
+
+            // 1. **優先解析明確的日期** (例如：YYYY年M月D日, M月D日)
+            let tempDateMatch;
+            const yearMonthDayRegex = /(\d{2,4})年(\d{1,2})月(\d{1,2})日/; // 2024年5月1日
+            const monthDayRegex = /(\d{1,2})月(\d{1,2})日/; // 5月1日
+            const yearMonthDayNoUnitRegex = /(\d{2,4})(\d{1,2})月(\d{1,2})日/; // 2024五月一日 (口語) -- 這種情況可能造成混淆，需謹慎
+            const specificDateRegex = /(\d{2,4})[-\/年](\d{1,2})[-\/月](\d{1,2})日?/; // 2024-05-01, 2024/5/1, 2024年5月1日
+
+            // 嘗試匹配 YYYY年M月D日 或 YYYY-MM-DD
+            tempDateMatch = speechResult.match(specificDateRegex);
+            if (tempDateMatch) {
+                let year = parseInt(tempDateMatch[1]);
+                let month = parseInt(tempDateMatch[2]);
+                let day = parseInt(tempDateMatch[3]);
+
+                // 簡單的年份處理，如果語音年份是兩位數，補齊
+                if (year < 100) {
+                    year += 2000; // 假設是21世紀
+                }
+
+                try {
+                    const dateObj = new Date(year, month - 1, day);
+                    // 驗證解析後的日期是否有效且與輸入匹配 (避免 2月30日 變 3月2日)
+                    if (dateObj.getFullYear() === year && (dateObj.getMonth() + 1) === month && dateObj.getDate() === day) {
+                        parsedDate = formatDate(dateObj);
+                        parsedTitle = parsedTitle.replace(tempDateMatch[0], '').trim();
+                    }
+                } catch (e) { /* ignore invalid date */ }
+            }
+
+            // 如果沒有解析到帶年份的日期，嘗試 M月D日
+            if (!parsedDate) {
+                tempDateMatch = speechResult.match(monthDayRegex);
+                if (tempDateMatch) {
+                    let month = parseInt(tempDateMatch[1]);
+                    let day = parseInt(tempDateMatch[2]);
+                    let year = new Date().getFullYear(); // 默認為今年
+
+                    // 處理跨年情況 (例如：12月在6月說) - 這裡做簡單判斷
+                    if (month < (new Date().getMonth() + 1)) {
+                        // 如果說的月份比現在小，且現在已是新的一年，則可能指的是去年
+                        // 這裡可以更複雜，但基礎上假定是今年或跨到下一年
+                        // year = new Date().getFullYear() + 1; // 這種判斷比較主觀，不建議預設
+                    }
+
+                    try {
+                        const dateObj = new Date(year, month - 1, day);
+                        if (dateObj.getFullYear() === year && (dateObj.getMonth() + 1) === month && dateObj.getDate() === day) {
+                           parsedDate = formatDate(dateObj);
+                           parsedTitle = parsedTitle.replace(tempDateMatch[0], '').trim();
+                        }
+                    } catch (e) { /* ignore invalid date */ }
+                }
+            }
+
+
+            // 2. **其次解析相對日期** (今天, 昨天, 前天, 明天)
+            const todayDate = new Date();
+            const tomorrowDate = new Date(); tomorrowDate.setDate(todayDate.getDate() + 1);
+            const yesterdayDate = new Date(); yesterdayDate.setDate(todayDate.getDate() - 1);
+            const twoDaysAgoDate = new Date(); twoDaysAgoDate.setDate(todayDate.getDate() - 2);
+
+            // 只有在還沒有解析到明確日期時才判斷相對日期
+            if (!parsedDate) {
+                if (speechResult.includes('今天')) {
+                    parsedDate = formatDate(todayDate);
+                    parsedTitle = parsedTitle.replace('今天', '').trim();
+                } else if (speechResult.includes('昨天')) {
+                    parsedDate = formatDate(yesterdayDate);
+                    parsedTitle = parsedTitle.replace('昨天', '').trim();
+                } else if (speechResult.includes('前天')) {
+                    parsedDate = formatDate(twoDaysAgoDate);
+                    parsedTitle = parsedTitle.replace('前天', '').trim();
+                } else if (speechResult.includes('明天')) {
+                    parsedDate = formatDate(tomorrowDate);
+                    parsedTitle = parsedTitle.replace('明天', '').trim();
+                }
+            }
+
+            // 3. 解析金額 (數字)
+            // 將金額解析放在日期之後，因為日期格式可能包含數字
+            const amountMatch = parsedTitle.match(/(\d+(\.\d+)?)/); // 在剩餘的標題中查找數字
+            if (amountMatch) {
+                parsedAmount = parseFloat(amountMatch[1]);
+                parsedTitle = parsedTitle.replace(amountMatch[0], '').trim();
+                parsedTitle = parsedTitle.replace(/元|塊錢|塊|錢/g, '').trim();
+            }
+
+
+            // 4. 解析分類
+            const availableCategories = Array.from(categorySelect.options).map(opt => opt.value).filter(v => v !== '');
+            // 將關鍵字進行排序，長的關鍵字優先匹配，避免「餐」匹配到「餐飲」而忽略「餐飲」
+            const sortedCategoryKeywords = Object.entries({
+                '餐飲': ['午餐', '晚餐', '早餐', '咖啡', '飲料', '食物', '外賣', '餐廳', '吃', '喝', '餐', '飯'],
+                '交通': ['計程車', '加油', '油錢', '交通費', '搭車', '車', '捷運', '公車'],
+                '娛樂': ['看電影', '唱歌', '遊戲', 'KTV', '電影院', '玩', '娛樂'],
+                '購物': ['買衣服', '買鞋子', '買東西', '百貨', '商場', '網購', '購物', '買'],
+                '生活': ['水費', '電費', '瓦斯費', '房租', '生活用品', '繳費', '日用品'],
+                '其他': ['雜項', '其他費用', '捐款']
+            }).sort((a, b) => { // 按關鍵字總長度或數量排序，以實現更精確匹配
+                const aLen = Math.max(...a[1].map(k => k.length));
+                const bLen = Math.max(...b[1].map(k => k.length));
+                return bLen - aLen;
+            });
+
+
+            for (const [categoryName, keywords] of sortedCategoryKeywords) {
+                 for (const keyword of keywords) {
+                     // 使用原始語音結果來判斷分類，因為標題可能被截斷
+                     if (speechResult.includes(keyword)) {
+                         parsedCategory = categoryName;
+                         // 從 parsedTitle 中移除匹配到的分類關鍵字，但要小心別刪錯
+                         // 移除關鍵字時，最好只移除與分類最相關的，避免誤刪
+                         parsedTitle = parsedTitle.replace(new RegExp(keyword + '\\s*', 'g'), '').trim();
+                         break;
+                     }
+                 }
+                 if (parsedCategory) break;
+             }
+
+
+            // 最終填充表單
+            titleInput.value = parsedTitle;
+
+            if (parsedAmount !== null) {
+                amountInput.value = parsedAmount;
+            } else {
+                amountInput.value = '';
+                messageDisplay.textContent += ' (金額未解析)';
+                messageDisplay.className = 'message warning';
+            }
+
+            if (parsedCategory && availableCategories.includes(parsedCategory)) { // 確保解析到的分類是有效選項
+                categorySelect.value = parsedCategory;
+            } else {
+                categorySelect.value = ''; // 如果沒解析到或解析到的分類不在選項中，清空
+                messageDisplay.textContent += ' (分類未解析或無效)';
+                messageDisplay.className = 'message warning';
+            }
+
+            // 如果語音沒有提供日期，使用預設值（比如今天）
+            if (!parsedDate) {
+                parsedDate = formatDate(todayDate); // 使用今天日期作為預設值
+                messageDisplay.textContent += ' (日期預設為今天)';
+                messageDisplay.className = 'message warning';
+            }
+            dateInput.value = parsedDate;
+
+
+            // 最終狀態提示
+            if (parsedAmount && parsedCategory && parsedDate) {
+                messageDisplay.textContent = '語音解析成功，請確認資訊後提交。';
+                messageDisplay.className = 'message success';
+            } else {
+                messageDisplay.textContent += ' 請檢查並補齊資訊。';
+                messageDisplay.className = 'message warning';
+            }
+        }
+    </script>
+</body>
+</html>
