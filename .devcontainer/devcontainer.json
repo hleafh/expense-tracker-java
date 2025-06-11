@@ -1,0 +1,36 @@
+{
+  "name": "Java Expense Tracker",
+  // 使用推薦的 Java 開發容器映像檔 (基於 Ubuntu Linux)
+  "image": "mcr.microsoft.com/devcontainers/java:17", // 指定 Java 17 版本
+
+  // 設定當 Codespace 啟動時自動轉發 Spring Boot 預設的 8080 port，方便您在瀏覽器中預覽
+  "forwardPorts": [8080],
+
+  // 將 GitHub Codespaces Secret "GCP_SERVICE_ACCOUNT_KEY" 安全地傳遞到 Codespace 的環境變數中
+  // 這樣在 postCreateCommand 中才能存取它
+  "containerEnv": {
+    "GCP_SERVICE_ACCOUNT_KEY": "${localEnv:GCP_SERVICE_ACCOUNT_KEY}"
+  },
+
+  // 設定最終的環境變數 GOOGLE_APPLICATION_CREDENTIALS 的路徑
+  // 這個路徑是金鑰檔案在 Codespace 內實際存在的位置
+  "remoteEnv": {
+    "GOOGLE_APPLICATION_CREDENTIALS": "/workspaces/expense-tracker-java/authentic-scout-462608-t5-9edddf9995b0.json"
+  },
+
+  // Codespace 容器建立完成後會自動執行的命令
+  // 1. 將 GitHub Secret 的內容寫入到指定的金鑰檔案中
+  //    注意：`\"$GCP_SERVICE_ACCOUNT_KEY\"` 中的雙引號是必要的，因為 JSON 內容可能包含特殊字元。
+  // 2. 使用 `chmod 600` 設定金鑰檔案的權限，使其只有檔案擁有者可讀寫，增加安全性。
+  // 3. 執行 `mvn install` 以確保所有 Maven 依賴都被下載和安裝。
+  "postCreateCommand": "echo \"$GCP_SERVICE_ACCOUNT_KEY\" > /workspaces/expense-tracker-java/authentic-scout-462608-t5-9edddf9995b0.json && chmod 600 /workspaces/expense-tracker-java/authentic-scout-462608-t5-9edddf9995b0.json && mvn install"
+
+  // 您也可以在這裡添加 VS Code 擴展，例如 Java Extension Pack
+  // "customizations": {
+  //   "vscode": {
+  //     "extensions": [
+  //       "vscjava.vscode-java-pack"
+  //     ]
+  //   }
+  // }
+}

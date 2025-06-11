@@ -6,6 +6,7 @@
     <title>簡易記帳系統</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        /* 基本樣式 */
         body {
             font-family: Arial, sans-serif;
             margin: 20px;
@@ -64,6 +65,7 @@
         .edit { background-color: #28a745; }
         .delete { background-color: #dc3545; }
 
+        /* 訊息提示樣式 */
         .message {
             margin-top: 15px;
             padding: 10px;
@@ -82,14 +84,24 @@
             background-color: #fff3cd;
             color: #856404;
         }
-        .speech-button { /* 語音按鈕的樣式 */
+        .info { /* 新增 info 樣式 */
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+        /* 語音按鈕樣式 */
+        .speech-button {
             background-color: #28a745;
             margin-top: 10px;
+        }
+        .speech-button.recording { /* 錄音中狀態 */
+            background-color: #ffc107; /* 警示黃色 */
+            color: #333;
         }
         .speech-button:hover {
             background-color: #218838;
         }
 
+        /* 表格樣式 */
         table {
             width: 100%;
             border-collapse: collapse;
@@ -103,18 +115,18 @@
             background-color: #f2f2f2;
         }
 
-        /* Modal */
+        /* Modal 彈窗樣式 */
         .modal {
-            display: none;
+            display: none; /* 預設隱藏 */
             position: fixed;
-            z-index: 2;
+            z-index: 2; /* 確保在最上層 */
             left: 0; top: 0;
             width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5);
+            background: rgba(0,0,0,0.5); /* 半透明背景 */
         }
         .modal-content {
             background: white;
-            margin: 10% auto;
+            margin: 10% auto; /* 垂直居中 */
             padding: 20px;
             width: 90%;
             max-width: 500px;
@@ -152,7 +164,9 @@
             <label for="date">日期：</label>
             <input type="date" id="date" required>
 
-            <button type="button" class="speech-button" id="speechInputButton">語音輸入標題、金額、分類、日期</button>
+            <button type="button" class="speech-button" id="speechInputButton">開始語音輸入</button>
+            <button type="button" class="speech-button" id="stopSpeechInputButton" style="display: none;">停止語音輸入</button>
+
 
             <button type="submit">新增支出</button>
             <div id="message" class="message"></div>
@@ -165,8 +179,7 @@
             <label for="cbYear">年份：</label>
             <input type="number" id="cbYear" min="2000" max="2100" value="2025" required>
             <label for="cbMonth">月份：</label>
-            <input type="number" id="cbMonth" min="1" max="12" value="5" required>
-            <label for="cbCategory">分類：</label>
+            <input type="number" id="cbMonth" min="1" max="12" value="6" required> <label for="cbCategory">分類：</label>
             <select id="cbCategory" required>
                 <option value="">請選擇</option>
                 <option>餐飲</option>
@@ -201,8 +214,7 @@
             <label for="statYear">年份：</label>
             <input type="number" id="statYear" min="2000" max="2100" value="2025">
             <label for="statMonth">月份：</label>
-            <input type="number" id="statMonth" min="1" max="12" value="5">
-            <button onclick="loadMonthlyStatistics()">查看統計</button>
+            <input type="number" id="statMonth" min="1" max="12" value="6"> <button onclick="loadMonthlyStatistics()">查看統計</button>
         </div>
 
         <h3>分類支出明細：</h3>
@@ -280,9 +292,13 @@
         const expenseApiUrl = '/api/expenses';
         const categoryBudgetApiUrl = '/api/category-budgets';
         const statisticsApiUrl = '/api/expenses/statistics';
+        const transcribeApiUrl = '/api/speech/transcribe'; // 新增語音轉文字 API 路徑
 
         let expensePieChartInstance = null;
         let budgetComparisonChartInstance = null;
+
+        let mediaRecorder; // 用於錄製音訊
+        let audioChunks = []; // 用於儲存音訊數據塊
 
         // 載入所有支出或依日期區間查詢
         async function loadExpenses() {
@@ -740,7 +756,9 @@
             // 設置預算和統計區塊的預設年份和月份為當前時間
             const today = new Date();
             const currentYear = today.getFullYear();
+            // 注意：getMonth() 返回 0-11，所以需要 +1
             const currentMonth = today.getMonth() + 1;
+            const currentDay = today.getDate(); // 獲取當前日期
 
             // 預算設定區塊
             document.getElementById('cbYear').value = currentYear;
@@ -756,52 +774,118 @@
             document.getElementById('statYear').addEventListener('change', loadMonthlyStatistics);
             document.getElementById('statMonth').addEventListener('change', loadMonthlyStatistics);
 
-            // === 語音輸入功能初始化 ===
+            // === 語音輸入功能初始化 (改用 MediaRecorder) ===
             const speechInputButton = document.getElementById('speechInputButton');
+            const stopSpeechInputButton = document.getElementById('stopSpeechInputButton');
             const messageDisplay = document.getElementById('message');
 
-            if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
-                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-                const recognition = new SpeechRecognition();
-
-                recognition.lang = 'zh-TW'; // 設定語音識別語言為繁體中文
-                recognition.continuous = false; // 只識別一次
-                recognition.interimResults = false; // 不顯示中間結果
-
-                speechInputButton.addEventListener('click', () => {
-                    messageDisplay.textContent = '請說出支出資訊 (例如: 買咖啡 120 元 餐飲 昨天)';
-                    messageDisplay.className = 'message info'; // 可以新增 info 樣式
-                    recognition.start();
-                });
-
-                recognition.onresult = (event) => {
-                    const speechResult = event.results[0][0].transcript;
-                    messageDisplay.textContent = `識別結果: ${speechResult}`;
-                    messageDisplay.className = 'message success';
-
-                    applySpeechResultToForm(speechResult);
-                };
-
-                recognition.onerror = (event) => {
-                    messageDisplay.textContent = `語音識別錯誤: ${event.error}`;
-                    messageDisplay.className = 'message error';
-                };
-
-                recognition.onend = () => {
-                    // console.log('語音識別結束。');
-                };
-
-            } else {
-                speechInputButton.style.display = 'none'; // 瀏覽器不支持則隱藏按鈕
-                messageDisplay.textContent = '抱歉，您的瀏覽器不支持語音輸入功能。請使用 Chrome 或其他兼容瀏覽器。';
+            // 檢查瀏覽器是否支援 MediaRecorder API
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                speechInputButton.style.display = 'none'; // 隱藏按鈕
+                stopSpeechInputButton.style.display = 'none'; // 隱藏按鈕
+                messageDisplay.textContent = '抱歉，您的瀏覽器不支持麥克風錄音功能。請使用 Chrome 或其他兼容瀏覽器。';
                 messageDisplay.className = 'message error';
+                return;
             }
+
+            let streamRef = null; // 用於保存媒體流的引用，以便在停止錄音時關閉
+
+            speechInputButton.addEventListener('click', async () => {
+                try {
+                    // 獲取麥克風音訊流
+                    streamRef = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    // 創建 MediaRecorder 實例，設定音訊格式為 WebM Opus
+                    // 這個格式與後端 `RecognitionConfig.AudioEncoding.WEBM_OPUS` 相匹配
+                    mediaRecorder = new MediaRecorder(streamRef, { mimeType: 'audio/webm; codecs=opus' });
+
+                    audioChunks = []; // 清空之前的音訊數據
+                    // 當有音訊數據可用時，將其存入 audioChunks
+                    mediaRecorder.ondataavailable = event => {
+                        audioChunks.push(event.data);
+                    };
+
+                    // 當錄音停止時觸發
+                    mediaRecorder.onstop = async () => {
+                        // 將所有音訊數據塊組合成一個 Blob 物件
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm; codecs=opus' });
+                        // 將音訊 Blob 發送到後端進行轉文字
+                        await sendAudioForTranscription(audioBlob);
+                        // 停止麥克風音訊流
+                        if (streamRef) {
+                            streamRef.getTracks().forEach(track => track.stop());
+                        }
+                        // 切換按鈕顯示狀態和樣式
+                        speechInputButton.style.display = 'block';
+                        stopSpeechInputButton.style.display = 'none';
+                        speechInputButton.classList.remove('recording');
+                    };
+
+                    mediaRecorder.start(); // 開始錄音
+                    messageDisplay.textContent = '請開始說話... (點擊「停止語音輸入」按鈕結束)';
+                    messageDisplay.className = 'message info';
+                    // 切換按鈕顯示狀態和樣式
+                    speechInputButton.style.display = 'none';
+                    stopSpeechInputButton.style.display = 'block';
+                    speechInputButton.classList.add('recording'); // 為「開始語音輸入」按鈕添加錄音中樣式
+
+                } catch (err) {
+                    console.error('無法取得麥克風權限:', err);
+                    messageDisplay.textContent = '無法取得麥克風權限，請允許瀏覽器使用麥克風。';
+                    messageDisplay.className = 'message error';
+                    speechInputButton.classList.remove('recording');
+                }
+            });
+
+            // 停止語音輸入按鈕的點擊事件
+            stopSpeechInputButton.addEventListener('click', () => {
+                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                    mediaRecorder.stop(); // 停止錄音
+                    messageDisplay.textContent = '語音錄製完成，正在識別中...';
+                    messageDisplay.className = 'message info';
+                }
+            });
         });
 
-        // ===============================================
-        // 新增和優化的語音解析邏輯函數
-        // ===============================================
+        // 將音訊 Blob 發送到後端進行語音轉文字
+        async function sendAudioForTranscription(audioBlob) {
+            const formData = new FormData();
+            formData.append('audioFile', audioBlob, 'recorded_audio.webm'); // 使用 .webm 副檔名，與後端設定匹配
 
+            try {
+                const res = await fetch(transcribeApiUrl, {
+                    method: 'POST',
+                    body: formData // 當使用 FormData 時，fetch 會自動設定 Content-Type: multipart/form-data
+                });
+
+                const data = await res.json();
+                const msg = document.getElementById('message');
+
+                if (res.ok) {
+                    if (data.transcription) {
+                        applySpeechResultToForm(data.transcription); // 呼叫解析函數填充表單
+                        msg.textContent = data.message || '語音轉文字成功，請確認資訊。';
+                        msg.className = 'message success';
+                    } else {
+                        msg.textContent = data.message || '語音識別結果為空，請說清楚一點。';
+                        msg.className = 'message warning';
+                    }
+                } else {
+                    msg.textContent = data.message || '語音轉文字失敗。';
+                    msg.className = 'message error';
+                }
+            } catch (error) {
+                console.error('發送音訊至後端失敗:', error);
+                const msg = document.getElementById('message');
+                msg.textContent = '語音轉文字服務連線失敗。';
+                msg.className = 'message error';
+            }
+        }
+
+        // ===============================================
+        // 優化的語音解析邏輯函數 (將識別到的文字填充到表單)
+        // ===============================================
+        // 這個函數將從 Google Cloud Speech-to-Text 服務得到的文字，解析並填入表單。
+        // Google Cloud 提供的辨識結果會比瀏覽器內建的更精準，因此解析會更容易。
         function applySpeechResultToForm(speechResult) {
             const titleInput = document.getElementById('title');
             const amountInput = document.getElementById('amount');
@@ -817,79 +901,87 @@
             // 輔助函數：將 Date 物件格式化為 YYYY-MM-DD
             const formatDate = (date) => date.toISOString().split('T')[0];
 
-            // 1. **優先解析明確的日期** (例如：YYYY年M月D日, M月D日)
-            let tempDateMatch;
-            const yearMonthDayRegex = /(\d{2,4})年(\d{1,2})月(\d{1,2})日/; // 2024年5月1日
-            const monthDayRegex = /(\d{1,2})月(\d{1,2})日/; // 5月1日
-            const yearMonthDayNoUnitRegex = /(\d{2,4})(\d{1,2})月(\d{1,2})日/; // 2024五月一日 (口語) -- 這種情況可能造成混淆，需謹慎
-            const specificDateRegex = /(\d{2,4})[-\/年](\d{1,2})[-\/月](\d{1,2})日?/; // 2024-05-01, 2024/5/1, 2024年5月1日
+            // 獲取當前日期資訊，用於相對日期判斷
+            const today = new Date();
+            const currentYear = today.getFullYear();
+            const currentMonth = today.getMonth() + 1; // getMonth() 返回 0-11
+            const currentDay = today.getDate();
 
-            // 嘗試匹配 YYYY年M月D日 或 YYYY-MM-DD
-            tempDateMatch = speechResult.match(specificDateRegex);
+            // 1. **優先解析明確的日期** (例如：YYYY年M月D日, M月D日, YYYY/MM/DD)
+            let tempDateMatch;
+            // 匹配格式：2024年5月1日、2024/5/1、2024-05-01 (日可省略)
+            const specificDateRegex = /(\d{2,4})[-\/年](\d{1,2})[-\/月](\d{1,2})日?/;
+            // 匹配格式：5月1日 (不含年份)
+            const monthDayRegex = /(\d{1,2})月(\d{1,2})日/;
+
+            // 嘗試匹配帶年份的日期
+            tempDateMatch = parsedTitle.match(specificDateRegex);
             if (tempDateMatch) {
                 let year = parseInt(tempDateMatch[1]);
                 let month = parseInt(tempDateMatch[2]);
                 let day = parseInt(tempDateMatch[3]);
 
-                // 簡單的年份處理，如果語音年份是兩位數，補齊
-                if (year < 100) {
-                    year += 2000; // 假設是21世紀
+                if (year < 100) { // 處理兩位數年份，例如 24年 -> 2024年
+                    year += 2000;
                 }
 
                 try {
-                    const dateObj = new Date(year, month - 1, day);
-                    // 驗證解析後的日期是否有效且與輸入匹配 (避免 2月30日 變 3月2日)
+                    const dateObj = new Date(year, month - 1, day); // 月份在 Date 物件中是 0-11
+                    // 驗證解析後的日期是否有效且與輸入匹配 (避免 2月30日 變成 3月2日)
                     if (dateObj.getFullYear() === year && (dateObj.getMonth() + 1) === month && dateObj.getDate() === day) {
                         parsedDate = formatDate(dateObj);
-                        parsedTitle = parsedTitle.replace(tempDateMatch[0], '').trim();
+                        parsedTitle = parsedTitle.replace(tempDateMatch[0], '').trim(); // 從標題中移除日期部分
                     }
-                } catch (e) { /* ignore invalid date */ }
+                } catch (e) { /* 忽略無效日期，繼續嘗試其他解析方式 */ }
             }
 
-            // 如果沒有解析到帶年份的日期，嘗試 M月D日
+            // 如果沒有解析到帶年份的日期，嘗試 M月D日 (預設年份為今年)
             if (!parsedDate) {
-                tempDateMatch = speechResult.match(monthDayRegex);
+                tempDateMatch = parsedTitle.match(monthDayRegex);
                 if (tempDateMatch) {
                     let month = parseInt(tempDateMatch[1]);
                     let day = parseInt(tempDateMatch[2]);
-                    let year = new Date().getFullYear(); // 默認為今年
+                    let year = currentYear; // 默認為今年
 
-                    // 處理跨年情況 (例如：12月在6月說) - 這裡做簡單判斷
-                    if (month < (new Date().getMonth() + 1)) {
-                        // 如果說的月份比現在小，且現在已是新的一年，則可能指的是去年
-                        // 這裡可以更複雜，但基礎上假定是今年或跨到下一年
-                        // year = new Date().getFullYear() + 1; // 這種判斷比較主觀，不建議預設
+                    // 進階跨年判斷 (可選，但增加邏輯複雜性)
+                    // 如果用戶說的月份比當前月份早，且當前月份已是下半年，
+                    // 則有可能指明年的日期。例如，現在是12月，說「1月5日」，很可能指明年。
+                    if (month < currentMonth && currentMonth >= 6) { // 假設下半年從6月開始
+                        // year++; // 這個判斷需要謹慎，如果用戶說的是今年的舊日期，會導致錯誤
+                        // 暫時不自動加年份，讓用戶自己檢查，確保更準確。
                     }
+
 
                     try {
                         const dateObj = new Date(year, month - 1, day);
                         if (dateObj.getFullYear() === year && (dateObj.getMonth() + 1) === month && dateObj.getDate() === day) {
-                           parsedDate = formatDate(dateObj);
-                           parsedTitle = parsedTitle.replace(tempDateMatch[0], '').trim();
+                            parsedDate = formatDate(dateObj);
+                            parsedTitle = parsedTitle.replace(tempDateMatch[0], '').trim(); // 從標題中移除日期部分
                         }
-                    } catch (e) { /* ignore invalid date */ }
+                    } catch (e) { /* 忽略無效日期 */ }
                 }
             }
 
 
             // 2. **其次解析相對日期** (今天, 昨天, 前天, 明天)
-            const todayDate = new Date();
-            const tomorrowDate = new Date(); tomorrowDate.setDate(todayDate.getDate() + 1);
-            const yesterdayDate = new Date(); yesterdayDate.setDate(todayDate.getDate() - 1);
-            const twoDaysAgoDate = new Date(); twoDaysAgoDate.setDate(todayDate.getDate() - 2);
-
             // 只有在還沒有解析到明確日期時才判斷相對日期
             if (!parsedDate) {
-                if (speechResult.includes('今天')) {
-                    parsedDate = formatDate(todayDate);
+                if (parsedTitle.includes('今天')) {
+                    parsedDate = formatDate(today);
                     parsedTitle = parsedTitle.replace('今天', '').trim();
-                } else if (speechResult.includes('昨天')) {
+                } else if (parsedTitle.includes('昨天')) {
+                    const yesterdayDate = new Date(today);
+                    yesterdayDate.setDate(today.getDate() - 1);
                     parsedDate = formatDate(yesterdayDate);
                     parsedTitle = parsedTitle.replace('昨天', '').trim();
-                } else if (speechResult.includes('前天')) {
+                } else if (parsedTitle.includes('前天')) {
+                    const twoDaysAgoDate = new Date(today);
+                    twoDaysAgoDate.setDate(today.getDate() - 2);
                     parsedDate = formatDate(twoDaysAgoDate);
                     parsedTitle = parsedTitle.replace('前天', '').trim();
-                } else if (speechResult.includes('明天')) {
+                } else if (parsedTitle.includes('明天')) {
+                    const tomorrowDate = new Date(today);
+                    tomorrowDate.setDate(today.getDate() + 1);
                     parsedDate = formatDate(tomorrowDate);
                     parsedTitle = parsedTitle.replace('明天', '').trim();
                 }
@@ -897,44 +989,46 @@
 
             // 3. 解析金額 (數字)
             // 將金額解析放在日期之後，因為日期格式可能包含數字
-            const amountMatch = parsedTitle.match(/(\d+(\.\d+)?)/); // 在剩餘的標題中查找數字
+            // 匹配數字和常見的金額單位 (元, 塊錢, 塊, 錢)
+            const amountMatch = parsedTitle.match(/(\d+(\.\d+)?)\s*(元|塊錢|塊|錢)?/);
             if (amountMatch) {
                 parsedAmount = parseFloat(amountMatch[1]);
-                parsedTitle = parsedTitle.replace(amountMatch[0], '').trim();
-                parsedTitle = parsedTitle.replace(/元|塊錢|塊|錢/g, '').trim();
+                parsedTitle = parsedTitle.replace(amountMatch[0], '').trim(); // 移除數字和單位
             }
 
 
             // 4. 解析分類
+            // 從下拉選單中獲取所有有效的分類選項
             const availableCategories = Array.from(categorySelect.options).map(opt => opt.value).filter(v => v !== '');
-            // 將關鍵字進行排序，長的關鍵字優先匹配，避免「餐」匹配到「餐飲」而忽略「餐飲」
-            const sortedCategoryKeywords = Object.entries({
-                '餐飲': ['午餐', '晚餐', '早餐', '咖啡', '飲料', '食物', '外賣', '餐廳', '吃', '喝', '餐', '飯'],
-                '交通': ['計程車', '加油', '油錢', '交通費', '搭車', '車', '捷運', '公車'],
-                '娛樂': ['看電影', '唱歌', '遊戲', 'KTV', '電影院', '玩', '娛樂'],
-                '購物': ['買衣服', '買鞋子', '買東西', '百貨', '商場', '網購', '購物', '買'],
-                '生活': ['水費', '電費', '瓦斯費', '房租', '生活用品', '繳費', '日用品'],
-                '其他': ['雜項', '其他費用', '捐款']
-            }).sort((a, b) => { // 按關鍵字總長度或數量排序，以實現更精確匹配
-                const aLen = Math.max(...a[1].map(k => k.length));
-                const bLen = Math.max(...b[1].map(k => k.length));
-                return bLen - aLen;
-            });
+            // 定義每個分類可能包含的關鍵字，越長的關鍵字越要排在前面
+            const categoryKeywords = {
+                '餐飲': ['餐飲', '午餐', '晚餐', '早餐', '咖啡', '飲料', '食物', '外賣', '餐廳', '吃', '喝', '餐', '飯'],
+                '交通': ['交通', '計程車', '加油', '油錢', '交通費', '搭車', '車', '捷運', '公車'],
+                '娛樂': ['娛樂', '看電影', '唱歌', '遊戲', 'KTV', '電影院', '玩'],
+                '購物': ['購物', '買衣服', '買鞋子', '買東西', '百貨', '商場', '網購', '買'],
+                '生活': ['生活', '水費', '電費', '瓦斯費', '房租', '生活用品', '繳費', '日用品'],
+                '其他': ['其他', '雜項', '其他費用', '捐款']
+            };
+
+            // 扁平化關鍵字列表並按關鍵字長度降序排序，確保長詞優先匹配，避免「餐」匹配到「餐飲」而忽略「餐飲」
+            const sortedKeywords = [];
+            for (const categoryName in categoryKeywords) {
+                categoryKeywords[categoryName].forEach(keyword => {
+                    sortedKeywords.push({ category: categoryName, keyword: keyword });
+                });
+            }
+            sortedKeywords.sort((a, b) => b.keyword.length - a.keyword.length);
 
 
-            for (const [categoryName, keywords] of sortedCategoryKeywords) {
-                 for (const keyword of keywords) {
-                     // 使用原始語音結果來判斷分類，因為標題可能被截斷
-                     if (speechResult.includes(keyword)) {
-                         parsedCategory = categoryName;
-                         // 從 parsedTitle 中移除匹配到的分類關鍵字，但要小心別刪錯
-                         // 移除關鍵字時，最好只移除與分類最相關的，避免誤刪
-                         parsedTitle = parsedTitle.replace(new RegExp(keyword + '\\s*', 'g'), '').trim();
-                         break;
-                     }
-                 }
-                 if (parsedCategory) break;
-             }
+            for (const item of sortedKeywords) {
+                if (parsedTitle.includes(item.keyword)) { // 在剩餘的標題中尋找分類關鍵字
+                    parsedCategory = item.category;
+                    // 從 parsedTitle 中移除匹配到的分類關鍵字，只移除第一個匹配到的
+                    // 使用正規表達式帶上 \s* (零個或多個空格) 確保移除更乾淨
+                    parsedTitle = parsedTitle.replace(new RegExp(item.keyword + '\\s*', 'g'), '').trim();
+                    break; // 找到後就停止，避免重複匹配
+                }
+            }
 
 
             // 最終填充表單
@@ -943,8 +1037,8 @@
             if (parsedAmount !== null) {
                 amountInput.value = parsedAmount;
             } else {
-                amountInput.value = '';
-                messageDisplay.textContent += ' (金額未解析)';
+                amountInput.value = ''; // 如果金額未解析到，清空欄位
+                messageDisplay.textContent = '語音解析: 金額未解析。';
                 messageDisplay.className = 'message warning';
             }
 
@@ -952,25 +1046,35 @@
                 categorySelect.value = parsedCategory;
             } else {
                 categorySelect.value = ''; // 如果沒解析到或解析到的分類不在選項中，清空
-                messageDisplay.textContent += ' (分類未解析或無效)';
+                // 如果已經有警告訊息，則附加，否則創建新的
+                if (!messageDisplay.textContent.includes('分類未解析')) { // 避免重複訊息
+                    messageDisplay.textContent += (messageDisplay.textContent ? ' ' : '') + '分類未解析或無效。';
+                }
                 messageDisplay.className = 'message warning';
             }
 
             // 如果語音沒有提供日期，使用預設值（比如今天）
             if (!parsedDate) {
-                parsedDate = formatDate(todayDate); // 使用今天日期作為預設值
-                messageDisplay.textContent += ' (日期預設為今天)';
+                parsedDate = formatDate(today); // 使用今天日期作為預設值
+                if (!messageDisplay.textContent.includes('日期預設為今天')) { // 避免重複訊息
+                    messageDisplay.textContent += (messageDisplay.textContent ? ' ' : '') + '日期預設為今天。';
+                }
                 messageDisplay.className = 'message warning';
             }
             dateInput.value = parsedDate;
 
 
             // 最終狀態提示
-            if (parsedAmount && parsedCategory && parsedDate) {
+            if (titleInput.value && amountInput.value && categorySelect.value && dateInput.value) { // 如果所有關鍵欄位都已填充
                 messageDisplay.textContent = '語音解析成功，請確認資訊後提交。';
                 messageDisplay.className = 'message success';
             } else {
-                messageDisplay.textContent += ' 請檢查並補齊資訊。';
+                // 如果有任何一項未解析成功，則顯示警告訊息
+                if (!messageDisplay.textContent) { // 如果沒有任何其他警告訊息
+                    messageDisplay.textContent = '語音解析不完整，請檢查並補齊資訊。';
+                } else {
+                    messageDisplay.textContent += ' 請檢查並補齊資訊。';
+                }
                 messageDisplay.className = 'message warning';
             }
         }

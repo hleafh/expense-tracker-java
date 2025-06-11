@@ -1,0 +1,32 @@
+# Java related files
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+target/
+.idea/ # IntelliJ IDEA project files
+.vscode/ # VS Code project files (if not already ignored by a global gitignore)
+.project # Eclipse project files
+.classpath
+.settings/
+.DS_Store # macOS specific
+Thumbs.db # Windows specific
+
+# Log files
+*.log
+logs/
+
+# Spring Boot specific
+*.bak
+*.orig
+*.swp
+*.swo
+*.temp
+*.tmp
+nohup.out
+.env # Environment variables file
+
+# Google Cloud Service Account Key (VERY IMPORTANT to ignore!)
+authentic-scout-462608-t5-9edddf9995b0.json
