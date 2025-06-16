@@ -1,6 +1,7 @@
 /workspaces/expense-tracker-java/src/main/java/com/expensetracker/ExpenseTrackerApplication.java
 /workspaces/expense-tracker-java/src/main/java/com/expensetracker/controller/CategoryBudgetController.java
 /workspaces/expense-tracker-java/src/main/java/com/expensetracker/controller/ExpenseController.java
+/workspaces/expense-tracker-java/src/main/java/com/expensetracker/controller/SpeechController.java
 /workspaces/expense-tracker-java/src/main/java/com/expensetracker/dto/CategoryBudgetDto.java
 /workspaces/expense-tracker-java/src/main/java/com/expensetracker/dto/ExpenseCreationResponseDto.java
 /workspaces/expense-tracker-java/src/main/java/com/expensetracker/dto/ExpenseDto.java
